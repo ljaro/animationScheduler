@@ -6,6 +6,10 @@
 
 using namespace testing;
 
+class Animation {};
+class Scheduler {};
+
+
 TEST(AnimScheduler, test1)
 {
     EXPECT_EQ(1, 1);
