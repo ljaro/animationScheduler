@@ -13,26 +13,35 @@ using namespace testing;
 class Animation {
 public:
     virtual ~Animation() = default;
-    virtual int id() = 0;
+
     virtual void start() = 0;
     virtual void stop() = 0;
     virtual bool running() = 0;
 
+    virtual void setOnFinished(std::function<void()> callback) {
+        onFinished = callback;
+    }
+
+    virtual void finished() {
+        if(onFinished) onFinished();
+    }
+private:
     std::function<void()> onFinished;
 };
 
 class MockAnimation : public Animation {
 public:
-    MOCK_METHOD0(id, int());
     MOCK_METHOD0(start, void());
     MOCK_METHOD0(stop, void());
     MOCK_METHOD0(running, bool());
 };
 
+using NiceAnimation = NiceMock<MockAnimation>;
+
 class Scheduler {
 public:
     void scheduleAnimation(Animation* anim, std::function<void()> callback = {})
-    {        
+    {
         if(currentIdx == 0) {
             queue.push_back(std::make_pair(anim, callback));
         } else {
@@ -47,7 +56,7 @@ public:
             auto& current = queue.front();
             if(!current.first->running()) {
                 current.first->start();
-                current.first->onFinished = [&](){
+                current.first->setOnFinished([&](){
                     auto& finishedAnimObj = queue.front();
                     if(finishedAnimObj.second) {
                         currentIdx++;
@@ -56,7 +65,7 @@ public:
                     }
                     queue.pop_front();
                     schedule();
-                };
+                });
             }
         }
     }
@@ -68,7 +77,7 @@ private:
 
 TEST(AnimScheduler, should_start_animation_after_scheduleAnimation_call)
 {
-    MockAnimation anim1;
+    NiceAnimation anim1;
 
     Scheduler s;
 
@@ -81,8 +90,8 @@ TEST(AnimScheduler, should_start_animation_after_scheduleAnimation_call)
 
 TEST(AnimScheduler, should_queue_animation_but_not_run_if_already_running)
 {
-    MockAnimation anim1;
-    MockAnimation anim2;
+    NiceAnimation anim1;
+    NiceAnimation anim2;
 
     Scheduler s;
 
@@ -101,8 +110,8 @@ TEST(AnimScheduler, should_queue_animation_but_not_run_if_already_running)
 
 TEST(AnimScheduler, should_start_another_if_prev_finished)
 {
-    MockAnimation anim1;
-    MockAnimation anim2;
+    NiceAnimation anim1;
+    NiceAnimation anim2;
 
     Scheduler s;
 
@@ -118,12 +127,12 @@ TEST(AnimScheduler, should_start_another_if_prev_finished)
 
     ON_CALL(anim2, running()).WillByDefault(Return(false));
 
-    anim1.onFinished();
+    anim1.finished();
 }
 
 TEST(AnimScheduler, should_call_callback)
 {
-    MockAnimation anim1;
+    NiceAnimation anim1;
 
     Scheduler s;
 
@@ -134,7 +143,7 @@ TEST(AnimScheduler, should_call_callback)
         invoked = true;
     });
 
-    anim1.onFinished();
+    anim1.finished();
 
     ASSERT_TRUE(invoked);
 
@@ -142,9 +151,9 @@ TEST(AnimScheduler, should_call_callback)
 
 TEST(AnimScheduler, should_respect_order_of_animation_from_callback)
 {
-    MockAnimation anim1;
-    MockAnimation animFromCallback;
-    MockAnimation anim2;
+    NiceAnimation anim1;
+    NiceAnimation animFromCallback;
+    NiceAnimation anim2;
 
     Scheduler s;
 
@@ -165,24 +174,24 @@ TEST(AnimScheduler, should_respect_order_of_animation_from_callback)
     s.scheduleAnimation(&anim2);
 
 
-    anim1.onFinished();
-    animFromCallback.onFinished();
-    anim2.onFinished();
+    anim1.finished();
+    animFromCallback.finished();
+    anim2.finished();
 }
 
 TEST(AnimScheduler, should_respect_order_of_animation_from_callback_complex1)
 {
-    MockAnimation anim1;
-    MockAnimation animFromCallback11;
-    MockAnimation animFromCallback12;
-    MockAnimation anim2;
-    MockAnimation animFromCallback2;
+    NiceAnimation anim1;
+    NiceAnimation animFromCallback11;
+    NiceAnimation animFromCallback12;
+    NiceAnimation anim2;
+    NiceAnimation animFromCallback2;
 
     {
         InSequence seq;
         EXPECT_CALL(anim1, start());
         EXPECT_CALL(animFromCallback11, start());
-        //EXPECT_CALL(animFromCallback12, start());
+        EXPECT_CALL(animFromCallback12, start());
         EXPECT_CALL(anim2, start());
         EXPECT_CALL(animFromCallback2, start());
     }
@@ -206,10 +215,10 @@ TEST(AnimScheduler, should_respect_order_of_animation_from_callback_complex1)
         s.scheduleAnimation(&animFromCallback2);
     });
 
-    anim1.onFinished();
-    animFromCallback11.onFinished();
-    animFromCallback12.onFinished();
-    anim2.onFinished();
-    animFromCallback2.onFinished();
+    anim1.finished();
+    animFromCallback11.finished();
+    animFromCallback12.finished();
+    anim2.finished();
+    animFromCallback2.finished();
 }
 
